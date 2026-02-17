@@ -1,7 +1,12 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { User, Role, LoginEvent, AcademicYear, DisciplineCase, WeekendDismissal, TOTAL_BASE_MARKS } from '../types';
-import { Plus, Edit2, Trash2, X, ShieldCheck, Mail, UserCircle, Key, Activity, Clock, Monitor, Archive, RotateCcw, Calendar, History, ShieldAlert, BookOpen, AlertCircle, TrendingDown, ChevronRight, Hash } from 'lucide-react';
+import { 
+  Plus, Edit2, Trash2, X, ShieldCheck, Mail, UserCircle, Key, Activity, Clock, 
+  Monitor, Archive, RotateCcw, Calendar, History, ShieldAlert, BookOpen, 
+  AlertCircle, TrendingDown, ChevronRight, Hash, Database, Download, Upload 
+} from 'lucide-react';
+import { db } from '../services/db';
 
 interface UserManagementProps {
   systemUsers: User[];
@@ -27,6 +32,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
   const [viewingYear, setViewingYear] = useState<AcademicYear | null>(null);
   const [newYearLabel, setNewYearLabel] = useState('');
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState<Omit<User, 'id'>>({
     fullName: '', email: '', password: '', role: 'Staff'
   });
@@ -52,8 +58,22 @@ const UserManagement: React.FC<UserManagementProps> = ({
     setIsModalOpen(false);
   };
 
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (confirm("WARNING: Importing a database will overwrite ALL current data and restart the application. Proceed?")) {
+        db.importDatabase(content);
+      }
+    };
+    reader.readAsText(file);
+  };
+
   return (
-    <div className="space-y-12 animate-in fade-in duration-500">
+    <div className="space-y-12 animate-in fade-in duration-500 pb-20">
       
       {/* Session Controls */}
       <section className="space-y-8">
@@ -140,6 +160,50 @@ const UserManagement: React.FC<UserManagementProps> = ({
         </div>
       </section>
 
+      {/* Database Management Section */}
+      <section className="bg-slate-900 rounded-[3rem] p-12 text-white shadow-2xl relative overflow-hidden group">
+        <div className="absolute top-0 right-0 p-16 opacity-10 rotate-12 group-hover:rotate-45 transition-transform duration-1000">
+           <Database size={240} />
+        </div>
+        <div className="relative z-10 max-w-2xl">
+          <div className="flex items-center space-x-3 mb-6">
+            <div className="p-3 bg-emerald-500/20 rounded-2xl border border-emerald-500/30">
+              <Database size={24} className="text-emerald-400" />
+            </div>
+            <h3 className="text-2xl font-black uppercase tracking-tighter text-emerald-400">Database Core</h3>
+          </div>
+          <h4 className="text-3xl font-black mb-4 leading-tight">System Integrity & Data Portability</h4>
+          <p className="text-slate-400 font-medium mb-10 leading-relaxed">
+            Generate a full system snapshot as a physical database file. This includes all student records, 
+            disciplinary history, SMS logs, and user credentials. You can migrate this file to another instance 
+            or keep it as an offline cold storage backup.
+          </p>
+          <div className="flex flex-wrap gap-4">
+            <button 
+              onClick={() => db.exportDatabase()}
+              className="px-10 py-5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl transition-all flex items-center space-x-3 shadow-xl shadow-emerald-900/40 font-black uppercase text-[10px] tracking-widest active:scale-95"
+            >
+              <Download size={20} />
+              <span>Download DB File</span>
+            </button>
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              className="px-10 py-5 bg-white/10 hover:bg-white/20 text-white rounded-2xl transition-all flex items-center space-x-3 border border-white/10 font-black uppercase text-[10px] tracking-widest active:scale-95"
+            >
+              <Upload size={20} />
+              <span>Restore from File</span>
+            </button>
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              className="hidden" 
+              accept=".json" 
+              onChange={handleImport} 
+            />
+          </div>
+        </div>
+      </section>
+
       {/* Operator Registry */}
       <section className="space-y-6">
         <div className="flex justify-between items-center bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm">
@@ -211,7 +275,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
         </div>
       </section>
 
-      {/* Year Archive Detail Modal */}
+      {/* Archive Modal ... exists ... */}
       {viewingYear && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md overflow-y-auto">
           <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col my-auto animate-in zoom-in duration-500">
@@ -316,7 +380,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
         </div>
       )}
 
-      {/* Year Finalize Transition Modal */}
+      {/* Form Modals (Year Finalize, Operator) ... exist ... */}
       {isYearModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl">
           <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-md p-12 animate-in zoom-in duration-500 border border-white/20 relative overflow-hidden">
@@ -364,7 +428,6 @@ const UserManagement: React.FC<UserManagementProps> = ({
         </div>
       )}
 
-      {/* Operator Enrollment Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-md">
           <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-md p-12 animate-in zoom-in duration-500">

@@ -27,6 +27,7 @@ import UserManagement from './components/UserManagement';
 
 // Services
 import { sendActualSMS } from './services/smsService';
+import { db } from './services/db';
 
 const INITIAL_YEAR: AcademicYear = {
   id: 'YEAR-2024',
@@ -48,89 +49,53 @@ const DEFAULT_USERS: User[] = [
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
-  
-  const [years, setYears] = useState<AcademicYear[]>(() => {
-    const saved = localStorage.getItem('sdms_years');
-    return saved ? JSON.parse(saved) : [INITIAL_YEAR];
-  });
-  
-  const [activeYearId, setActiveYearId] = useState<string>(() => {
-    const saved = localStorage.getItem('sdms_active_year');
-    if (saved) return saved;
-    return INITIAL_YEAR.id;
-  });
+  const [years, setYears] = useState<AcademicYear[]>([]);
+  const [activeYearId, setActiveYearId] = useState<string>('');
+  const [activeTerm, setActiveTerm] = useState<number>(1);
+  const [systemUsers, setSystemUsers] = useState<User[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [cases, setCases] = useState<DisciplineCase[]>([]);
+  const [smsLogs, setSmsLogs] = useState<SMSLog[]>([]);
+  const [weekendDismissals, setWeekendDismissals] = useState<WeekendDismissal[]>([]);
+  const [exitPermissions, setExitPermissions] = useState<ExitPermission[]>([]);
+  const [loginEvents, setLoginEvents] = useState<LoginEvent[]>([]);
 
-  const [activeTerm, setActiveTerm] = useState<number>(() => {
-    const saved = localStorage.getItem('sdms_active_term');
-    return saved ? parseInt(saved) : 1;
-  });
+  // Initial Load
+  useEffect(() => {
+    const data = db.loadFullDatabase();
+    const users = db.getUsers();
 
-  const [systemUsers, setSystemUsers] = useState<User[]>(() => {
-    const saved = localStorage.getItem('sdms_users');
-    return saved ? JSON.parse(saved) : DEFAULT_USERS;
-  });
+    setYears(data.years.length ? data.years : [INITIAL_YEAR]);
+    setActiveYearId(data.activeYearId || (data.years[0]?.id || INITIAL_YEAR.id));
+    setActiveTerm(data.activeTerm);
+    setSystemUsers(users.length ? users : DEFAULT_USERS);
+    setStudents(data.students.length ? data.students : INITIAL_STUDENTS);
+    setCases(data.cases);
+    setSmsLogs(data.smsLogs);
+    setWeekendDismissals(data.weekendDismissals);
+    setExitPermissions(data.exitPermissions);
+    setLoginEvents(data.loginEvents);
+    setUser(data.user);
+  }, []);
 
-  const [students, setStudents] = useState<Student[]>(() => {
-    const saved = localStorage.getItem('sdms_students');
-    return saved ? JSON.parse(saved) : INITIAL_STUDENTS;
-  });
-
-  const [cases, setCases] = useState<DisciplineCase[]>(() => {
-    const saved = localStorage.getItem('sdms_cases');
-    const data: DisciplineCase[] = saved ? JSON.parse(saved) : [];
-    return data.map(c => ({ 
-      ...c, 
-      yearId: c.yearId || INITIAL_YEAR.id,
-      term: c.term || 1
-    }));
-  });
-
-  const [smsLogs, setSmsLogs] = useState<SMSLog[]>(() => {
-    const saved = localStorage.getItem('sdms_sms');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [weekendDismissals, setWeekendDismissals] = useState<WeekendDismissal[]>(() => {
-    const saved = localStorage.getItem('sdms_dismissals');
-    const data: WeekendDismissal[] = saved ? JSON.parse(saved) : [];
-    return data.map(d => ({ 
-      ...d, 
-      yearId: d.yearId || INITIAL_YEAR.id,
-      term: d.term || 1
-    }));
-  });
-
-  const [exitPermissions, setExitPermissions] = useState<ExitPermission[]>(() => {
-    const saved = localStorage.getItem('sdms_exit_permissions');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [loginEvents, setLoginEvents] = useState<LoginEvent[]>(() => {
-    const saved = localStorage.getItem('sdms_login_events');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  // Persistance
-  useEffect(() => localStorage.setItem('sdms_years', JSON.stringify(years)), [years]);
-  useEffect(() => localStorage.setItem('sdms_active_year', activeYearId), [activeYearId]);
-  useEffect(() => localStorage.setItem('sdms_active_term', activeTerm.toString()), [activeTerm]);
-  useEffect(() => localStorage.setItem('sdms_users', JSON.stringify(systemUsers)), [systemUsers]);
-  useEffect(() => localStorage.setItem('sdms_students', JSON.stringify(students)), [students]);
-  useEffect(() => localStorage.setItem('sdms_cases', JSON.stringify(cases)), [cases]);
-  useEffect(() => localStorage.setItem('sdms_sms', JSON.stringify(smsLogs)), [smsLogs]);
-  useEffect(() => localStorage.setItem('sdms_dismissals', JSON.stringify(weekendDismissals)), [weekendDismissals]);
-  useEffect(() => localStorage.setItem('sdms_exit_permissions', JSON.stringify(exitPermissions)), [exitPermissions]);
-  useEffect(() => localStorage.setItem('sdms_login_events', JSON.stringify(loginEvents)), [loginEvents]);
+  // Sync with DB service on changes
+  useEffect(() => {
+    if (activeYearId) {
+      db.saveState({ 
+        user, students, cases, smsLogs, years, 
+        activeYearId, activeTerm, weekendDismissals, 
+        exitPermissions, loginEvents 
+      });
+    }
+  }, [user, students, cases, smsLogs, years, activeYearId, activeTerm, weekendDismissals, exitPermissions, loginEvents]);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('sdms_user');
-    if (savedUser) setUser(JSON.parse(savedUser));
-  }, []);
+    if (systemUsers.length) db.saveUsers(systemUsers);
+  }, [systemUsers]);
 
   const handleLogin = (u: User) => {
     const timestamp = new Date().toISOString();
     setUser(u);
-    localStorage.setItem('sdms_user', JSON.stringify(u));
     setSystemUsers(prev => prev.map(item => item.id === u.id ? { ...item, lastLogin: timestamp } : item));
     const newEvent: LoginEvent = {
       id: `EVT-${Date.now()}`,
@@ -145,7 +110,6 @@ const App: React.FC = () => {
 
   const handleLogout = () => {
     setUser(null);
-    localStorage.removeItem('sdms_user');
   };
 
   const switchTerm = (term: number) => {
@@ -176,7 +140,6 @@ const App: React.FC = () => {
   const activeDismissals = weekendDismissals.filter(d => d.yearId === activeYearId);
   const activeExitPermissions = exitPermissions.filter(p => p.yearId === activeYearId);
 
-  // Actions
   const addStudent = (s: Student) => setStudents(prev => [...prev, s]);
   const updateStudent = (s: Student) => setStudents(prev => prev.map(item => item.id === s.id ? s : item));
   const deleteStudent = (id: string) => {
